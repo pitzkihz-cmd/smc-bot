@@ -1,123 +1,121 @@
+import os, time, threading, requests, pytz
 from flask import Flask
-import requests, threading, time
 from datetime import datetime
-import pytz
+import yfinance as yf
+import pandas as pd
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 
 app = Flask(__name__)
-
-BOT_TOKEN = "8967884674:AAEYIsjVIkMVZCdUU0P29EKvHMpY2guGKJs"
-CHANNEL_ID = "@Smcpaviebotchannel"
-
-data = {
-  "XAUUSD": {"high": 0, "low": 99999, "history": [], "last_signal": 0},
-  "EURUSD": {"high": 0, "low": 99999, "history": [], "last_signal": 0}
-}
+@app.route('/')
+def home(): return "GOLD WIN/LOSS TRACKER LIVE"
 
 def send_telegram(text):
     try:
-        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-        requests.post(url, json={"chat_id": CHANNEL_ID, "text": text, "parse_mode": "Markdown"}, timeout=10)
-    except Exception as e:
-        print(e)
+        for cid in [CHAT_ID, CHANNEL_ID]:
+            if cid:
+                requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                json={"chat_id": cid, "text": text, "parse_mode":"Markdown"}, timeout=10)
+    except: pass
 
-def get_price(symbol):
-    try:
-        if symbol == "XAUUSD":
-            r = requests.get("https://api.gold-api.com/price/XAU", timeout=10).json()
-            return float(r.get("price", 0))
-        else:
-            r = requests.get("https://open.er-api.com/v6/latest/EUR", timeout=10).json()
-            return float(r["rates"]["USD"])
-    except:
-        return 0
+def get_price():
+    df = yf.download("GC=F", period="1d", interval="1m", progress=False)
+    if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+    return float(df['Close'].iloc[-1])
 
-def get_session():
-    utc = datetime.now(pytz.utc)
-    hour = utc.hour
-    # London 8-12 UTC, NY 13-17 UTC, Overlap 12-16 UTC is BEST
-    if 8 <= hour <= 12: return "LONDON"
-    if 13 <= hour <= 17: return "NEW YORK"
-    if 12 <= hour <= 16: return "LONDON/NY OVERLAP 🔥 BEST"
-    return "ASIA / LOW"
-
-def is_a_plus_setup(symbol, price, side):
-    d = data[symbol]
-    history = d["history"]
-    if len(history) < 20: return False, "Collecting data"
-
-    # 1. Avoid spam - 1 signal per 30 min per pair max
-    if time.time() - d["last_signal"] < 1800: return False, "Cooldown"
-
-    # 2. Session filter - A+ only in London/NY
-    session = get_session()
-    if "ASIA" in session: return False, f"Bad session {session}"
-
-    # 3. Liquidity sweep logic - price must have wicked past recent high/low then rejected
-    recent_high = max(history[-20:])
-    recent_low = min(history[-20:])
-
-    if side == "BUY":
-        # For BUY: must have swept low first (sell liquidity taken)
-        swept = min(history[-10:]) < recent_low
-        if not swept: return False, "No liquidity sweep"
-    else:
-        swept = max(history[-10:]) > recent_high
-        if not swept: return False, "No liquidity sweep"
-
-    # 4. Volatility filter
-    volatility = max(history[-20:]) - min(history[-20:])
-    if symbol == "XAUUSD" and volatility < 3: return False, "Choppy"
-    if symbol == "EURUSD" and volatility < 0.0008: return False, "Choppy"
-
-    return True, f"A+ Confluence | {session}"
-
-def loop():
-    send_telegram("✅ *A+ SMC BOT LIVE*\n\nPairs: XAUUSD + EURUSD\nFilter: BOS + Liquidity Sweep + Session (London/NY only)\nQuality: A+ Only = 1-3 signals/day but high accuracy\nMode: No Deriv, No TradingView")
+def bot_loop():
+    active = None
+    last_sent = {}
+    wins = 0; losses = 0
+    
     while True:
-        for symbol in ["XAUUSD", "EURUSD"]:
-            try:
-                price = get_price(symbol)
-                if price == 0: continue
-                d = data[symbol]
-                d["history"].append(price)
-                if len(d["history"]) > 100: d["history"].pop(0)
+        try:
+            tz = pytz.timezone("Africa/Nairobi")
+            now = datetime.now(tz)
+            h = now.hour + now.minute/60
 
-                if len(d["history"]) < 20:
-                    continue
+            # --- TRACK ACTIVE TRADE ---
+            if active:
+                price = get_price()
+                side = active['side']
+                # TP1 BE alert
+                if not active.get('be_done'):
+                    tp1_trigger = (price <= active['tp1'] if side=="SELL" else price >= active['tp1'])
+                    if tp1_trigger:
+                        send_telegram(f"🔔 *BE ALERT*\n{side} TP1 hit at {active['tp1']:.1f} price now {price:.1f}\n👉 Move SL to Break-Even NOW!")
+                        active['be_done']=True
 
-                # BOS detection
-                thresh = 2 if symbol == "XAUUSD" else 0.0005
+                # Check WIN / LOSS
+                hit_tp = (price <= active['tp3'] if side=="SELL" else price >= active['tp3'])
+                hit_sl = (price >= active['sl3'] if side=="SELL" else price <= active['sl3'])
 
-                if price > d["high"] and d["high"]!= 0 and price - d["high"] > thresh:
-                    ok, reason = is_a_plus_setup(symbol, price, "BUY")
-                    if ok:
-                        send_telegram(f"🔥 *A+ {symbol} BUY*\n\nEntry: {price}\nSL: {price - (8 if symbol=='XAUUSD' else 0.0010)}\nTP1: {price + (12 if symbol=='XAUUSD' else 0.0015)}\nTP2: {price + (25 if symbol=='XAUUSD' else 0.0030)}\n\n✅ BOS + Sweep + {reason}\nSession: {get_session()}\n\n*Only A+ setups - No gamble*")
-                        d["last_signal"] = time.time()
-                    d["high"] = price
+                if hit_tp:
+                    wins+=1
+                    send_telegram(f"✅ *WIN*\n{side} {active['strat']} CLOSED\nEntry {active['e2']:.1f} -> TP3 {active['tp3']:.1f}\nProfit +{abs(active['tp3']-active['e2']):.1f}$\n\nScore: {wins}W - {losses}L = {wins/(wins+losses)*100:.0f}%")
+                    active=None
+                elif hit_sl:
+                    losses+=1
+                    send_telegram(f"❌ *LOSS*\n{side} {active['strat']} STOPPED\nEntry {active['e2']:.1f} -> SL {active['sl3']:.1f}\nLoss -{abs(active['sl3']-active['e2']):.1f}$\n\nScore: {wins}W - {losses}L\nNext will win 💪")
+                    active=None
 
-                elif price < d["low"] and d["low"]!= 99999 and d["low"] - price > thresh:
-                    ok, reason = is_a_plus_setup(symbol, price, "SELL")
-                    if ok:
-                        send_telegram(f"🔥 *A+ {symbol} SELL*\n\nEntry: {price}\nSL: {price + (8 if symbol=='XAUUSD' else 0.0010)}\nTP1: {price - (12 if symbol=='XAUUSD' else 0.0015)}\nTP2: {price - (25 if symbol=='XAUUSD' else 0.0030)}\n\n✅ BOS + Sweep + {reason}\nSession: {get_session()}\n\n*Only A+ setups - No gamble*")
-                        d["last_signal"] = time.time()
-                    d["low"] = price
+                time.sleep(10); continue
 
-                if price > d["high"]: d["high"] = price
-                if price < d["low"]: d["low"] = price
+            # --- FIND NEW ENTRY ---
+            if not (10 <= h <= 23.5): time.sleep(30); continue
 
-            except Exception as e:
-                print(e)
-        time.sleep(20)
+            df15 = yf.download("GC=F", period="5d", interval="15m", progress=False)
+            df5 = yf.download("GC=F", period="5d", interval="5m", progress=False)
+            if isinstance(df15.columns, pd.MultiIndex): df15.columns = df15.columns.get_level_values(0)
+            if isinstance(df5.columns, pd.MultiIndex): df5.columns = df5.columns.get_level_values(0)
+            
+            if (df5['High'].iloc[-1]-df5['Low'].iloc[-1]) > 10: time.sleep(30); continue
 
-threading.Thread(target=loop, daemon=True).start()
+            rh, rl = df15['High'].iloc[-20:-1].max(), df15['Low'].iloc[-20:-1].min()
+            c15, p15 = df15.iloc[-1], df15.iloc[-2]
 
-@app.route('/')
-def home(): return "A+ SMC LIVE - XAUUSD + EURUSD"
+            signal=None
+            if c15['Close']>rh and p15['Close']<rh and df15['Low'].iloc[-1]<rl and df5['Low'].iloc[-1]>df5['High'].iloc[-3]:
+                signal=("BUY","BOS+Sweep",rl,rh)
+            if c15['Close']<rl and p15['Close']>rl and df15['High'].iloc[-1]>rh and df5['High'].iloc[-1]<df5['Low'].iloc[-3]:
+                signal=("SELL","BOS+Sweep",rh,rl)
+            if not signal and 15.5<=h<=17.5:
+                if df5['Low'].iloc[-1]>df5['High'].iloc[-3]: signal=("BUY","Silver Bullet",df5['Low'].iloc[-1],rh)
+                if df5['High'].iloc[-1]<df5['Low'].iloc[-3]: signal=("SELL","Silver Bullet",df5['High'].iloc[-1],rl)
 
-@app.route('/test')
-def test():
-    send_telegram(f"✅ *TEST OK - A+ MODE*\n\nPairs: XAUUSD + EURUSD\nSession now: {get_session()}\nFilter: Only best setups\nYour bot is ready - wait for London/NY session for A+ signal")
-    return "A+ Test sent!"
+            if not signal: time.sleep(20); continue
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+            side,strat,sweep,bos = signal
+            key=f"{side}-{int(sweep)}"
+            if key in last_sent and time.time()-last_sent[key] < 900: time.sleep(20); continue
+
+            rng=abs(bos-sweep)
+            if side=="BUY":
+                e1,sl1,e2,sl2,e3,sl3,tp1,tp2,tp3 = sweep+rng*0.5,sweep-1.5,sweep+rng*0.62,sweep-0.5,sweep+rng*0.79,sweep+rng*0.79-1.2,sweep+rng*0.9,bos+rng*1.2,bos+rng*1.8
+            else:
+                e1,sl1,e2,sl2,e3,sl3,tp1,tp2,tp3 = sweep-rng*0.5,sweep+1.5,sweep-rng*0.62,sweep+0.5,sweep-rng*0.79,sweep-rng*0.79+1.2,sweep-rng*0.9,bos-rng*1.2,bos-rng*1.8
+
+            msg=f"""
+🔥 *GOLD {side} | {strat}*
+{now.strftime('%H:%M EAT')} | Score {wins}W-{losses}L
+
+📍 E1 `{e1:.1f}` SL `{sl1:.1f}`
+📍 E2 `{e2:.1f}` SL `{sl2:.1f}` MAIN
+📍 E3 `{e3:.1f}` SL `{sl3:.1f}`
+🎯 TP1 `{tp1:.1f}` BE
+🎯 TP2 `{tp2:.1f}`
+🎯 TP3 `{tp3:.1f}` RUNNER
+"""
+            send_telegram(msg)
+            active={"side":side,"strat":strat,"e2":e2,"sl3":sl3,"tp1":tp1,"tp3":tp3,"be_done":False}
+            last_sent[key]=time.time()
+            time.sleep(90)
+
+        except Exception as e:
+            print(e); time.sleep(30)
+
+threading.Thread(target=bot_loop, daemon=True).start()
+
+if __name__=="__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT",10000)))
