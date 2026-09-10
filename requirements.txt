@@ -1,4 +1,6 @@
-Flask
+flask
+yfinance
+pandas
 requests
 pytz
 gunicorn
