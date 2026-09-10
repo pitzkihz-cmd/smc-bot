@@ -1,7 +1,6 @@
-Flask==3.0.0
-yfinance==0.2.40
-pandas==2.2.2
-requests==2.31.0
-pytz==2024.1
-numpy==1.26.4
-gunicorn==22.0.0
+flask
+yfinance
+pandas
+requests
+pytz
+gunicorn
