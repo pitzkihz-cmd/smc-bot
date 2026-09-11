@@ -4,7 +4,7 @@ from threading import Thread
 from datetime import datetime
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID", "7804217051")
+CHAT_ID = os.getenv("CHAT_ID", "8967884674")
 EAT = pytz.timezone("Africa/Nairobi")
 
 app = Flask(__name__)
