@@ -1,6 +1,6 @@
-flask
 yfinance
-pandas
 requests
 pytz
+matplotlib
+mplfinance
 gunicorn
