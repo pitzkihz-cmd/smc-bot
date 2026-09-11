@@ -10,7 +10,7 @@ import matplotlib
 matplotlib.use('Agg')
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID", "@Smcpaviebotchannel")
+CHAT_ID = os.getenv("CHAT_ID", "https://t.me/Smcpaviebotchannel")
 EAT = pytz.timezone("Africa/Nairobi")
 
 app = Flask(__name__)
