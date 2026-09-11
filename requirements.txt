@@ -3,4 +3,5 @@ requests
 pytz
 matplotlib
 mplfinance
-
+flask
+gunicorn
