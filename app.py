@@ -11,42 +11,40 @@ app = Flask(__name__)
 PAIRS = {"EURUSD":"EURUSD=X","GBPUSD":"GBPUSD=X","USDJPY":"USDJPY=X","USDCHF":"USDCHF=X","AUDUSD":"AUDUSD=X","NZDUSD":"NZDUSD=X","USDCAD":"USDCAD=X","DXY":"DX-Y.NYB","XAUUSD GOLD":"GC=F"}
 
 @app.route("/")
-def home(): return f"Pavie PUSH LIVE {CHAT_ID} <br><a href='/test'>TEST 1</a> | <a href='/testall'>TEST ALL PUSH</a> | <a href='/push'>PUSH NOW</a>"
+def home():
+    return f"Pavie PUSH LIVE {CHAT_ID} <br><br> <a href='/test'>1. TEST</a><br><br> <a href='/push'>2. PUSH 3x SOUND</a><br><br> <a href='/testall'>3. TESTALL 3 SIGNALS</a>"
 
 @app.route("/test")
 def test():
-    r=requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id":CHAT_ID,"text":f"🔔 TEST 1 OK Pavie!\nID {CHAT_ID}\n@Paviesmc2026bot LIVE ✅","parse_mode":"HTML"}, timeout=15)
-    return f"Sent {r.status_code} {r.text[:200]}"
+    r=requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id":CHAT_ID,"text":f"🔔 TEST 1 OK Pavie!\nID {CHAT_ID}\n@Paviesmc2026bot LIVE ✅\n{datetime.now(EAT).strftime('%H:%M:%S')}","parse_mode":"HTML","disable_notification":False}, timeout=15)
+    return f"Sent {r.status_code} to {CHAT_ID} | {r.text[:200]}"
 
 @app.route("/push")
 def push():
-    # PUSH NOTIFICATION with sound
     for i in range(3):
         requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={
             "chat_id": CHAT_ID,
-            "text": f"🔔 <b>PUSH NOTIFICATION {i+1}/3</b>\n\n🔊 Sound ON\n📳 Vibrate ON\n⚡️ @Paviesmc2026bot\n\nID {CHAT_ID} WORKING ✅\nTime: {datetime.now(EAT).strftime('%H:%M:%S')}",
+            "text": f"🔔 <b>PUSH NOTIFICATION {i+1}/3 🔊</b>\n\nSound ON 📳\n@Paviesmc2026bot LIVE\nID {CHAT_ID}\nTime: {datetime.now(EAT).strftime('%H:%M:%S')}",
             "parse_mode": "HTML",
-            "disable_notification": False # FORCE PUSH SOUND
-        })
-        time.sleep(2)
-    return "3 PUSH sent with SOUND!"
+            "disable_notification": False
+        }, timeout=15)
+        time.sleep(1)
+    return "3 PUSH sent with SOUND! Check Telegram"
 
 @app.route("/testall")
 def testall():
-    # Test everything: text + signal + gold
-    try:
-        price = yf.download("GC=F", period="1d", interval="1m", progress=False)["Close"].iloc[-1]
-    except: price=3685.50
-
+    # FIXED - NO YFINANCE = NO ERROR
     msgs = [
-        f"☀️ <b>GOOD MORNING PAVIE!</b>\n{datetime.now(EAT).strftime('%A %d %b %H:%M')}\nLondon Session 🇬🇧\n45 signals today\n@Paviesmc2026bot",
-        f"💵 <b>EURUSD BUY 5x/Day London 🇬🇧</b>\n\n<b>FIB:</b> 50% 1.08500 | 62% 1.08450 | 70.5% 1.08420 ⭐ | 79% 1.08390\n<b>ENTRY:</b> 1.08450 - 1.08390 Live 1.08480 <b>ENTER NOW</b>\n<b>SL:</b> 1.08250\n<b>TP1:</b> 1.08500 | <b>TP2:</b> 1.08650 | <b>TP3:</b> 1.08800\n\n<b>PUSH TEST SIGNAL ✅</b>",
-        f"🟡 <b>XAUUSD GOLD BUY 5x/Day NY 🇺🇸</b>\n\n<b>FIB:</b> 50% 3670 | 62% 3665 | 70.5% 3660 ⭐ | 79% 3655\n<b>ENTRY:</b> 3665 - 3655 Live {price:.2f} <b>ENTER NOW</b>\n<b>SL:</b> 3645\n<b>TP1:</b> 3670 | <b>TP2:</b> 3685 | <b>TP3:</b> 3700\n\n<b>GOLD PUSH TEST ✅</b>\n<b>⏰ {datetime.now(EAT).strftime('%H:%M')} | @Paviesmc2026bot</b>"
+        f"☀️ <b>GOOD MORNING PAVIE PUSH OK!</b>\n{datetime.now(EAT).strftime('%A %d %b %H:%M')}\nLondon Session 🇬🇧\n45/day LIVE ✅\n@Paviesmc2026bot",
+        f"💵 <b>EURUSD BUY TEST PUSH 🔊 2/3</b>\n\n<b>FIB:</b> 50% 1.08500 | 62% 1.08450 | 70.5% 1.08420 ⭐ | 79% 1.08390\n<b>ENTRY:</b> 1.08450 - 1.08390 Live 1.08480 <b>ENTER NOW</b>\n<b>SL:</b> 1.08250\n<b>TP1:</b> 1.08500 | <b>TP2:</b> 1.08650 | <b>TP3:</b> 1.08800\n\n<b>PUSH OK ✅</b>",
+        f"🟡 <b>XAUUSD GOLD BUY TEST PUSH 🔊 3/3</b>\n\n<b>FIB:</b> 50% 3670 | 62% 3665 | 70.5% 3660 ⭐ | 79% 3655\n<b>ENTRY:</b> 3665 - 3655 Live 3685.50 <b>ENTER NOW</b>\n<b>SL:</b> 3645\n<b>TP1:</b> 3670 | <b>TP2:</b> 3685 | <b>TP3:</b> 3700\n\n<b>GOLD PUSH OK ✅</b>\n<b>⏰ {datetime.now(EAT).strftime('%H:%M')} | @Paviesmc2026bot</b>"
     ]
+    ok=0
     for m in msgs:
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id":CHAT_ID,"text":m,"parse_mode":"HTML","disable_notification":False}, timeout=15)
-        time.sleep(3)
-    return "TEST ALL 3 PUSHED! Check Telegram"
+        r=requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id":CHAT_ID,"text":m,"parse_mode":"HTML","disable_notification":False}, timeout=15)
+        if r.status_code==200: ok+=1
+        time.sleep(1)
+    return f"PUSHED {ok}/3 to {CHAT_ID} - Check Telegram NOW! If 3/3 = ALL GOOD"
 
 def send(t):
     try: requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={"chat_id":CHAT_ID,"text":t,"parse_mode":"HTML","disable_notification":False}, timeout=25)
@@ -86,11 +84,10 @@ def build(name,data):
     return f"""{"🟡" if is_gold else "💵"} <b>{name} {side} 5x/Day {sess}</b>\n\n<b>FIB:</b> 50% {f50:{fmt}} | 62% {f62:{fmt}} | 70.5% {f705:{fmt}} ⭐ | 79% {f79:{fmt}}\n<b>ENTRY:</b> {zone} Live {price:{fmt}} <b>ENTER NOW</b>\n<b>SL:</b> {sl:{fmt}} (-{risk:{fmt}})\n<b>TP1:</b> {tp1:{fmt}} | <b>TP2:</b> {tp2:{fmt}} | <b>TP3:</b> {tp3:{fmt}}\n\n<b>WHY:</b> BOS + Liquidity + OB + OTE\n<b>⏰ {now.strftime('%H:%M %d-%b')} | @Paviesmc2026bot</b>\n"""
 
 def loop():
-    send(f"🚀 <b>@Paviesmc2026bot PUSH LIVE Pavie!</b>\nID {CHAT_ID}\n45/day + PUSH 🔊\nTest: /testall")
+    send(f"🚀 <b>@Paviesmc2026bot PUSH LIVE Pavie!</b>\nID {CHAT_ID}\n45/day + PUSH 🔊\n/testall FIXED NO ERROR")
     last={}; daily={}
     while True:
         try:
-            now=datetime.now(EAT)
             for name,ticker in PAIRS.items():
                 if daily.get(name,0)>=5: continue
                 if time.time()-last.get(name,0) < 17280 and daily.get(name,0)>0: continue
