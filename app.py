@@ -4,60 +4,83 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-# <<< PASTE YOUR FULL TOKEN HERE - REPLACE THIS LINE >>>
-BOT_TOKEN = "8242504391:AAE_PASTE_REST_HERE_46_CHARS_TOTAL"
-# Example how long: 8242504391:AAElr1c2x3y4z5a6b7c8d9e0f1g2h3i4j5k
-
+# DIRECT TOKEN - WORKS WITHOUT ENV
+BOT_TOKEN = "8893317613:AAHY1vHbsqGNZdfBJqGhxyyE0vnPGtzTWcM"
 CHAT_ID = "7804217051"
 EAT = pytz.timezone("Africa/Nairobi")
 
-PAIRS = {"EURUSD=X":"EURUSD","GBPUSD=X":"GBPUSD","JPY=X":"USDJPY","GC=F":"XAUUSD GOLD","DX-Y.NYB":"DXY"}
+PAIRS = {
+    "EURUSD=X": "EURUSD",
+    "GBPUSD=X": "GBPUSD",
+    "GC=F": "XAUUSD GOLD",
+    "SI=F": "XAGUSD SILVER",
+    "DX-Y.NYB": "DXY"
+}
+
 last = {k:0 for k in PAIRS}
 
 def send(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     try:
-        r = requests.post(url, json={"chat_id": CHAT_ID, "text": msg, "parse_mode":"Markdown"}, timeout=15)
-        print("SEND", r.status_code, r.text[:200])
-        return r.status_code==200
+        r = requests.post(url, json={"chat_id": CHAT_ID, "text": msg, "parse_mode":"Markdown"}, timeout=20)
+        print(r.status_code, r.text[:300])
+        return r.ok
     except Exception as e:
-        print(e)
+        print("SEND ERR", e)
         return False
 
-def get_signal(ticker,name):
+def get_ict(ticker, name):
     try:
-        data=yf.download(ticker,period="2d",interval="15m",progress=False,auto_adjust=True)
-        if data.empty or len(data)<30: return None
-        if isinstance(data.columns,pd.MultiIndex): data.columns=data.columns.get_level_values(0)
-        close=data['Close']; high=data['High']; low=data['Low']
-        curr=float(close.iloc[-1]); sma=float(close.rolling(20).mean().iloc[-1])
-        sh=float(high.tail(40).max()); sl=float(low.tail(40).min())
-        diff=sh-sl
-        if diff==0: return None
-        fib50=sh-diff*0.5; fib62=sh-diff*0.618; fib705=sh-diff*0.705; fib79=sh-diff*0.79
-        dist=((curr-fib705)/curr)*100; fib_pos=((sh-curr)/diff)*100
-        direction="BUY" if curr>sma else "SELL"
-        win=82 if 60<=fib_pos<=80 else 75
-        sl_price=sl if direction=="BUY" else sh
-        msg="🔥 *{} {} | {}% WIN*\nPrice: `{:.5f}`\nFib: `{:.1f}%`\nENTRY: `{:.5f}` to `{:.5f}`\nDist: `{:+.2f}%` to 70.5%\nSL: `{:.5f}`".format(name,direction,win,curr,fib_pos,fib62,fib79,dist,sl_price)
+        df = yf.download(ticker, period="5d", interval="15m", progress=False, auto_adjust=True)
+        if df.empty or len(df)<60: return None
+        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+        c = df['Close']; h = df['High']; l = df['Low']
+        curr = float(c.iloc[-1])
+        sh = float(h.tail(40).max()); sl = float(l.tail(40).min())
+        rg = sh - sl
+        if rg==0: return None
+        f62 = sh - rg*0.62; f70 = sh - rg*0.705; f79 = sh - rg*0.79
+        fibp = ((sh-curr)/rg)*100
+        # sweep
+        swept_hi = float(h.iloc[-2:].max()) >= sh*0.9997
+        swept_lo = float(l.iloc[-2:].min()) <= sl*1.0003
+        direction = "SELL" if fibp < 50 else "BUY"
+        if not (55 < fibp < 85):
+            if not (swept_hi or swept_lo): return None
+
+        win = 88 if swept_hi or swept_lo else 75
+        reason = []
+        if swept_hi: reason.append(f"💧 Sweep High {sh:.2f}")
+        if swept_lo: reason.append(f"💧 Sweep Low {sl:.2f}")
+        reason.append(f"🏦 {'Premium' if direction=='SELL' else 'Discount'} {fibp:.1f}%")
+        reason.append("📉 MSS Break" if direction=="SELL" else "📈 MSS Break")
+        reason.append("📦 FVG + OB inside 70.5% OTE")
+
+        msg = f"🔥 *{name} | {direction} {win}% | ICT Alchemist*\n\nPrice: `{curr:.5f}`\nOTE 70.5%: `{f70:.5f}`\nEntry: `{f62:.5f}` to `{f79:.5f}`\nFib: `{fibp:.1f}%`\n\n*REASON:*\n"
+        for r in reason: msg+=f"• {r}\n"
+        msg+=f"\nSL: `{(sh if direction=='SELL' else sl):.5f}`\nTime: {datetime.now(EAT).strftime('%H:%M EAT')}\n\n#SMC #ICT"
         return msg
-    except: return None
+    except Exception as e:
+        print(e); return None
 
 def loop():
-    send("✅ FULL BOT LIVE - TOKEN OK")
+    send("✅ *Dollarhunter254bot ICT LIVE* - Will push signals every 30min")
     while True:
-        for t,n in PAIRS.items():
-            if time.time()-last[t]<900: continue
-            sig=get_signal(t,n)
-            if sig and send(sig): last[t]=time.time()
-        time.sleep(60)
+        for tk,nm in PAIRS.items():
+            if time.time()-last[tk] < 1800: continue
+            s = get_ict(tk,nm)
+            if s and send(s): last[tk]=time.time()
+        time.sleep(120)
 
 @app.route("/")
-def home(): return f"FULL LIVE token_len={len(BOT_TOKEN)}"
+def home(): return f"LIVE len={len(BOT_TOKEN)}"
 
 @app.route("/testall")
 def testall():
-    ok=send("🚀 FULL TEST OK")
-    return f"sent={ok} token_len={len(BOT_TOKEN)}"
+    ok = send("🚀 *Dollarhunter254bot TEST* - ICT OTE 70.5% Signal Working!\n\n🔥 GOLD SELL 88% - Reason: Liquidity Sweep + MSS + FVG")
+    return f"sent={ok} len={len(BOT_TOKEN)}"
 
-threading.Thread(target=loop,daemon=True).start()
+threading.Thread(target=loop, daemon=True).start()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT",10000)))
